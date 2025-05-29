@@ -2,7 +2,7 @@
 
 /**
  * NPM Publishing Timeout Protection Test
- * 
+ *
  * This test verifies that the timeout protection mechanisms are working correctly
  * in the enhanced NPM publisher implementation.
  */
@@ -19,17 +19,18 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
   return new Promise((resolve) => {
     console.log(`⏱️  Testing timeout protection for: ${command}`);
     console.log(`   Timeout: ${timeoutMs / 1000}s`);
-    
+
     const startTime = Date.now();
-    
+
     // Create a hanging command for testing (sleep command)
-    const testCommand = process.platform === 'win32' 
-      ? ['timeout', '/t', '10', '/nobreak'] 
-      : ['sleep', '10'];
-    
+    const testCommand =
+      process.platform === "win32"
+        ? ["timeout", "/t", "10", "/nobreak"]
+        : ["sleep", "10"];
+
     const child = spawn(testCommand[0], testCommand.slice(1), {
       cwd: workingDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ["pipe", "pipe", "pipe"],
       shell: true,
     });
 
@@ -39,7 +40,9 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
     // Set up timeout protection (mimicking our implementation)
     timeoutId = setTimeout(() => {
       if (!completed) {
-        console.log(`   🚨 TIMEOUT: Command exceeded ${timeoutMs / 1000}s - killing process`);
+        console.log(
+          `   🚨 TIMEOUT: Command exceeded ${timeoutMs / 1000}s - killing process`
+        );
         child.kill("SIGTERM");
 
         // Force kill after 2 seconds if still not dead
@@ -56,7 +59,7 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
           success: false,
           timedOut: true,
           duration: duration,
-          message: `Command timed out after ${timeoutMs / 1000}s`
+          message: `Command timed out after ${timeoutMs / 1000}s`,
         });
       }
     }, timeoutMs);
@@ -66,13 +69,15 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
         completed = true;
         clearTimeout(timeoutId);
         const duration = Date.now() - startTime;
-        
-        console.log(`   ✅ Process terminated in ${duration}ms with exit code: ${code}`);
+
+        console.log(
+          `   ✅ Process terminated in ${duration}ms with exit code: ${code}`
+        );
         resolve({
           success: code === 0,
           timedOut: false,
           duration: duration,
-          message: `Command completed normally`
+          message: `Command completed normally`,
         });
       }
     });
@@ -86,7 +91,7 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
           success: false,
           timedOut: false,
           duration: Date.now() - startTime,
-          message: `Process error: ${error.message}`
+          message: `Process error: ${error.message}`,
         });
       }
     });
@@ -98,25 +103,37 @@ function testTimeoutProtection(command, workingDir, timeoutMs = 5000) {
  */
 async function testTimeoutConfigurations() {
   console.log("📋 Testing Timeout Configurations from npmPublisher.ts:\n");
-  
+
   const configurations = [
-    { command: "npm run build", timeout: 2000, expected: "Should timeout in 2s" },
+    {
+      command: "npm run build",
+      timeout: 2000,
+      expected: "Should timeout in 2s",
+    },
     { command: "npm test", timeout: 3000, expected: "Should timeout in 3s" },
-    { command: "npm publish", timeout: 1000, expected: "Should timeout in 1s" }
+    { command: "npm publish", timeout: 1000, expected: "Should timeout in 1s" },
   ];
-  
+
   for (const config of configurations) {
     console.log(`🔧 Testing: ${config.command}`);
     console.log(`   Expected: ${config.expected}`);
-    
-    const result = await testTimeoutProtection(config.command, ".", config.timeout);
-    
+
+    const result = await testTimeoutProtection(
+      config.command,
+      ".",
+      config.timeout
+    );
+
     if (result.timedOut) {
-      console.log(`   ✅ PASS: Timeout protection worked (${result.duration}ms)`);
+      console.log(
+        `   ✅ PASS: Timeout protection worked (${result.duration}ms)`
+      );
     } else {
-      console.log(`   ❌ FAIL: Command completed unexpectedly (${result.duration}ms)`);
+      console.log(
+        `   ❌ FAIL: Command completed unexpectedly (${result.duration}ms)`
+      );
     }
-    
+
     console.log(`   Result: ${result.message}\n`);
   }
 }
@@ -126,16 +143,16 @@ async function testTimeoutConfigurations() {
  */
 async function testProcessTermination() {
   console.log("🔧 Testing Process Termination Mechanisms:\n");
-  
+
   console.log("1. Testing SIGTERM → SIGKILL fallback:");
   const result = await testTimeoutProtection("test-hanging-command", ".", 3000);
-  
+
   if (result.timedOut) {
     console.log("   ✅ PASS: Process termination worked correctly");
   } else {
     console.log("   ❌ FAIL: Process termination failed");
   }
-  
+
   console.log(`   Duration: ${result.duration}ms`);
   console.log(`   Message: ${result.message}\n`);
 }
@@ -146,11 +163,13 @@ async function testProcessTermination() {
 async function runTimeoutTests() {
   try {
     console.log("🎯 Testing NPM Publisher Timeout Protection\n");
-    console.log("This test verifies the timeout mechanisms implemented in npmPublisher.ts\n");
-    
+    console.log(
+      "This test verifies the timeout mechanisms implemented in npmPublisher.ts\n"
+    );
+
     await testTimeoutConfigurations();
     await testProcessTermination();
-    
+
     console.log("✅ Timeout Protection Tests Complete!\n");
     console.log("📋 Summary:");
     console.log("  ✅ Timeout detection working");
@@ -158,9 +177,10 @@ async function runTimeoutTests() {
     console.log("  ✅ SIGTERM → SIGKILL fallback working");
     console.log("  ✅ Duration tracking working");
     console.log("  ✅ Error handling working");
-    
-    console.log("\n🎯 NPM Publisher should now handle hanging commands gracefully!");
-    
+
+    console.log(
+      "\n🎯 NPM Publisher should now handle hanging commands gracefully!"
+    );
   } catch (error) {
     console.error("❌ Test failed:", error.message);
   }
