@@ -1,5 +1,11 @@
+# Ignore build output directories
 out
 dist
+
+# Ignore dependencies
 node_modules
+
 .vscode-test/
+
+# Ignore build artifacts
 *.vsix
