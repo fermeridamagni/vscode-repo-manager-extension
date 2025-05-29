@@ -1,0 +1,6 @@
+- **Ensure comprehensive coverage of all reported issues in the CHANGELOG.md**
+- **Maintain consistent formatting and structure in the CHANGELOG.md**
+- **Use clear and concise language to describe fixes and enhancements**
+- **Avoid premature alerts in terminal operations to ensure a clean user experience**
+- **Provide clear user guidance throughout the NPM publishing process**
+- **Ensure all changes are documented in the CHANGELOG.md with proper versioning**
