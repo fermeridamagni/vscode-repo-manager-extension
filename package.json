@@ -1,0 +1,164 @@
+{
+  "name": "repo-manager",
+  "displayName": "Repo Manager",
+  "description": "Manage packages in repos and monorepos: Create GitHub releases, publish to NPM, and make conventional commits",
+  "version": "0.0.1",
+  "publisher": "your-publisher-name",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/repo-manager"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/repo-manager/issues"
+  },
+  "homepage": "https://github.com/your-username/repo-manager#readme",
+  "keywords": [
+    "package management",
+    "github releases",
+    "npm publish",
+    "conventional commits",
+    "monorepo",
+    "repository management"
+  ],
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "repoManager",
+          "title": "Repo Manager",
+          "icon": "$(package)"
+        }
+      ]
+    },
+    "views": {
+      "repoManager": [
+        {
+          "id": "repoManagerView",
+          "name": "Packages",
+          "icon": "$(package)",
+          "when": "workspaceHasRepos || !workspaceHasRepos"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "repoManagerView",
+        "contents": "No packages found in this workspace.\n\nTo get started:\n• Add a package.json file to your project\n• Or work in a workspace with Node.js packages\n\n[Refresh](command:repoManager.refresh)\n\n[Create package.json](command:npm.init)",
+        "when": "!workspaceHasRepos"
+      }
+    ],
+    "commands": [
+      {
+        "command": "repoManager.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "repoManager.createRelease",
+        "title": "Create GitHub Release",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "repoManager.publishNpm",
+        "title": "Publish to NPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "repoManager.conventionalCommit",
+        "title": "Conventional Commit",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "repoManager.viewPackageDetails",
+        "title": "View Package Details",
+        "icon": "$(info)"
+      },
+      {
+        "command": "repoManager.openPackageJson",
+        "title": "Open package.json",
+        "icon": "$(file-code)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "repoManager.refresh",
+          "when": "view == repoManagerView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "repoManager.createRelease",
+          "when": "view == repoManagerView && viewItem == package",
+          "group": "release"
+        },
+        {
+          "command": "repoManager.publishNpm",
+          "when": "view == repoManagerView && viewItem == package",
+          "group": "publish"
+        },
+        {
+          "command": "repoManager.conventionalCommit",
+          "when": "view == repoManagerView && viewItem == package",
+          "group": "git"
+        },
+        {
+          "command": "repoManager.viewPackageDetails",
+          "when": "view == repoManagerView && viewItem == package",
+          "group": "info"
+        },
+        {
+          "command": "repoManager.openPackageJson",
+          "when": "view == repoManagerView && viewItem == package",
+          "group": "info"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run package",
+    "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.15.24",
+    "@types/semver": "^7.7.0",
+    "@types/vscode": "^1.100.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.3",
+    "eslint": "^9.25.1",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.0",
+    "semver": "^7.6.0",
+    "simple-git": "^3.21.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
