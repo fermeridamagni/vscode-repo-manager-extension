@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+out/
+*.vsix
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage
+coverage/
+
+# Generated files
+CHANGELOG.md
