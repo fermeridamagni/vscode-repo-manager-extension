@@ -49,13 +49,18 @@ class NpmPublisher {
 
     if (fs.existsSync(localNpmrc)) {
       hasNpmrc = true;
-      authMethod = authMethod === "none" ? "npmrc" : "both";
       details.push("Found local .npmrc file");
 
       try {
         const content = fs.readFileSync(localNpmrc, "utf8");
         if (content.includes("authToken") || content.includes("_auth")) {
+          hasToken = true;
+          authMethod = authMethod === "none" ? "npmrc" : "both";
           details.push("Local .npmrc contains authentication tokens");
+        } else {
+          details.push(
+            "Local .npmrc exists but contains no authentication tokens"
+          );
         }
       } catch (error) {
         details.push("Local .npmrc exists but couldn't read content");
@@ -64,13 +69,18 @@ class NpmPublisher {
 
     if (fs.existsSync(globalNpmrc)) {
       hasNpmrc = true;
-      authMethod = authMethod === "none" ? "npmrc" : "both";
       details.push("Found global .npmrc file");
 
       try {
         const content = fs.readFileSync(globalNpmrc, "utf8");
         if (content.includes("authToken") || content.includes("_auth")) {
+          hasToken = true;
+          authMethod = authMethod === "none" ? "npmrc" : "both";
           details.push("Global .npmrc contains authentication tokens");
+        } else {
+          details.push(
+            "Global .npmrc exists but contains no authentication tokens"
+          );
         }
       } catch (error) {
         details.push("Global .npmrc exists but couldn't read content");
@@ -322,14 +332,52 @@ class NpmPublisher {
       // Check if user is logged in to npm
       const loginCheck = await this.checkNpmLogin(packageInfo.path);
       if (!loginCheck) {
-        const login = await vscode.window.showInformationMessage(
+        const action = await vscode.window.showInformationMessage(
           "You need to be logged in to npm to publish packages.",
           "Login to npm",
+          "Open Terminal for Manual Publish",
           "Cancel"
         );
 
-        if (login === "Login to npm") {
+        if (action === "Login to npm") {
           await this.npmLogin(packageInfo.path);
+          // Re-check authentication after login attempt
+          const recheck = await this.checkNpmLogin(packageInfo.path);
+          if (!recheck) {
+            vscode.window.showErrorMessage(
+              "Authentication failed. Please try again or use manual publish."
+            );
+            return;
+          }
+        } else if (action === "Open Terminal for Manual Publish") {
+          // Get publish options first
+          const manualPublishOptions = await this.getPublishOptions();
+          if (!manualPublishOptions) {
+            return;
+          }
+
+          // Build the npm publish command
+          let publishCommand = "npm publish";
+          if (manualPublishOptions.tag !== "latest") {
+            publishCommand += ` --tag ${manualPublishOptions.tag}`;
+          }
+          if (manualPublishOptions.access === "public") {
+            publishCommand += " --access public";
+          }
+
+          // Open terminal with the command
+          const terminal = vscode.window.createTerminal({
+            name: `NPM Publish - ${packageInfo.name}`,
+            cwd: packageInfo.path,
+          });
+
+          terminal.show();
+          terminal.sendText(publishCommand);
+
+          vscode.window.showInformationMessage(
+            `Terminal opened for manual NPM publish. Command: ${publishCommand}\n\nPlease ensure you're authenticated (run 'npm login' if needed) and complete the publish process manually.`
+          );
+          return;
         } else {
           return;
         }
@@ -398,7 +446,7 @@ class NpmPublisher {
       // First check for environment variables and .npmrc files
       const authCheck = await this.checkNpmAuth(workingDir);
 
-      if (authCheck.hasToken || authCheck.hasNpmrc) {
+      if (authCheck.hasToken) {
         vscode.window.showInformationMessage(
           `NPM authentication detected (${
             authCheck.authMethod
@@ -437,8 +485,12 @@ class NpmPublisher {
 
       // Show detailed error if authentication failed
       if (result.error || result.output.includes("ENEEDAUTH")) {
+        const errorDetails =
+          authCheck.details.length > 0
+            ? ` Found: ${authCheck.details.join(", ")}`
+            : "";
         vscode.window.showWarningMessage(
-          "NPM authentication required. No valid authentication found in environment variables or .npmrc files."
+          `NPM authentication required. No valid authentication found in environment variables or .npmrc files.${errorDetails}`
         );
       }
 
