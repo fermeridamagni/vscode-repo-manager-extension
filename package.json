@@ -2,10 +2,10 @@
   "name": "vscode-repo-manager-extension",
   "displayName": "Repo Manager",
   "description": "Manage packages in repos and monorepos: Create GitHub releases, publish to NPM, and make conventional commits",
-  "version": "0.0.2",
-  "publisher": "fermeridamagni",
+  "version": "0.0.3",
+  "publisher": "magnidev",
   "author": {
-    "name": "fermeridamagni",
+    "name": "fermeridamagni <Magni Development>",
     "url": "https://github.com/fermeridamagni"
   },
   "repository": {

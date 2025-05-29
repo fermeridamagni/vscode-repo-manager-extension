@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.0.3](releases/tag/v0.0.3) - 2025-05-29
+
+### Added
+
+- Update VSCode engine version and specify minimum Node.js version
+- Reintroduce type definitions for WorkspaceInfo, PackageInfo, GitInfo, ReleaseInfo, and ConventionalCommitType
+- Add Copilot code generation instructions for CHANGELOG.md management
+- Bump version to 0.0.2 in package.json
+- Fix premature alert messages during manual NPM publishing; improve user experience
+- Add comprehensive test for improved OTP handling in NPM publishing
+- Update CHANGELOG.md with detailed NPM publishing OTP handling and enhancements; remove ENHANCEMENT_SUMMARY.md
+- Add comprehensive tests for NPM authentication fix, covering various scenarios
+- Enhance NpmPublisher with detailed authentication checks and manual publish options
+- Add complete workflow and NPM publishing test scripts for enhanced release pipeline validation
+- Implement NpmPublisher for npm package management
+
+### Changed
+
+- Improve code formatting and readability in authentication detection tests
+- add Prettier configuration and ignore files, enhance VS Code settings, and improve README and CONTRIBUTING documentation
+- Add comprehensive tests for authentication detection and timeout protection
+- Implement feature X to enhance user experience and optimize performance
+- Organize and format VS Code configuration files for improved readability
+- Format .gitignore for improved readability and organization
+- Refactor tsconfig.json to enable additional strict type-checking options
+- Update package.json with correct extension name, publisher, and repository URLs
+- Add TypeScript configuration file (tsconfig.json) with strict type-checking options
+
+### Fixed
+
+- Add author information and license to package.json
+
+
 All notable changes to the "repo-manager" extension will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
