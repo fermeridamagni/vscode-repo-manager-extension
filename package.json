@@ -1,17 +1,17 @@
 {
-  "name": "repo-manager",
+  "name": "vscode-repo-manager-extension",
   "displayName": "Repo Manager",
   "description": "Manage packages in repos and monorepos: Create GitHub releases, publish to NPM, and make conventional commits",
   "version": "0.0.1",
-  "publisher": "your-publisher-name",
+  "publisher": "fermeridamagni",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/repo-manager"
+    "url": "https://github.com/fermeridamagni/vscode-repo-manager-extension"
   },
   "bugs": {
-    "url": "https://github.com/your-username/repo-manager/issues"
+    "url": "https://github.com/fermeridamagni/vscode-repo-manager-extension/issues"
   },
-  "homepage": "https://github.com/your-username/repo-manager#readme",
+  "homepage": "https://github.com/fermeridamagni/vscode-repo-manager-extension#readme",
   "keywords": [
     "package management",
     "github releases",
