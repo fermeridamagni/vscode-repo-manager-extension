@@ -53,7 +53,9 @@ class NpmPublisher {
 
       try {
         const content = fs.readFileSync(localNpmrc, "utf8");
-        if (content.includes("authToken") || content.includes("_auth")) {
+        // Check for actual authentication tokens, not just any occurrence of "_auth"
+        const hasAuthToken = this.containsAuthToken(content);
+        if (hasAuthToken) {
           hasToken = true;
           authMethod = authMethod === "none" ? "npmrc" : "both";
           details.push("Local .npmrc contains authentication tokens");
@@ -73,7 +75,9 @@ class NpmPublisher {
 
       try {
         const content = fs.readFileSync(globalNpmrc, "utf8");
-        if (content.includes("authToken") || content.includes("_auth")) {
+        // Check for actual authentication tokens, not just any occurrence of "_auth"
+        const hasAuthToken = this.containsAuthToken(content);
+        if (hasAuthToken) {
           hasToken = true;
           authMethod = authMethod === "none" ? "npmrc" : "both";
           details.push("Global .npmrc contains authentication tokens");
@@ -96,73 +100,201 @@ class NpmPublisher {
   }
 
   /**
-   * Executes npm command and handles OTP input properly.
+   * Executes npm command with timeout protection and proper OTP handling.
+   * Enhanced to prevent hanging and provide better user feedback.
    * @param command The npm command to execute.
    * @param workingDir The directory to run the command in.
    * @param requiresOtp Whether the command might require OTP input.
+   * @param options Additional options for timeout and progress control.
    * @returns Promise that resolves when command completes.
    */
   private async executeNpmCommand(
     command: string,
     workingDir: string,
-    requiresOtp: boolean = false
-  ): Promise<{ success: boolean; output: string; error?: string }> {
+    requiresOtp: boolean = false,
+    options: {
+      timeoutMs?: number;
+      progressTitle?: string;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    output: string;
+    error?: string;
+    timedOut?: boolean;
+  }> {
+    // Default timeout values based on command type
+    const defaultTimeouts: { [key: string]: number } = {
+      "npm run build": 120000, // 2 minutes for build
+      "npm test": 180000, // 3 minutes for tests
+      "npm publish": 60000, // 1 minute for publish
+      default: 90000, // 90 seconds default
+    };
+
+    const timeoutMs =
+      options.timeoutMs || defaultTimeouts[command] || defaultTimeouts.default;
+
+    const progressTitle = options.progressTitle || `Running: ${command}`;
+
+    if (requiresOtp) {
+      // For commands that might require OTP, use interactive terminal with timeout
+      return this.executeInteractiveNpmCommand(command, workingDir, timeoutMs);
+    }
+
+    // For non-interactive commands with timeout protection
     return new Promise((resolve) => {
-      if (requiresOtp) {
-        // For commands that might require OTP, use interactive terminal
-        const terminal = vscode.window.createTerminal({
-          name: "NPM Command",
-          cwd: workingDir,
-        });
+      let completed = false;
+      let timeoutId: NodeJS.Timeout;
+      const startTime = Date.now();
 
-        terminal.show();
-        terminal.sendText(command);
+      console.log(`🚀 Starting command: ${command} (timeout: ${timeoutMs}ms)`);
 
-        // Show message and wait for user confirmation
-        vscode.window
-          .showInformationMessage(
-            "NPM command is running in the terminal. If prompted for OTP (One-Time Password), please enter it. Click OK when the command completes.",
-            "OK"
-          )
-          .then(() => {
-            terminal.dispose();
-            resolve({ success: true, output: "Command completed in terminal" });
+      const child = spawn("npm", command.split(" ").slice(1), {
+        cwd: workingDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: true,
+      });
+
+      let output = "";
+      let errorOutput = "";
+
+      // Set up timeout protection
+      timeoutId = setTimeout(() => {
+        if (!completed) {
+          console.log(`⏰ Command timeout: ${command} exceeded ${timeoutMs}ms`);
+          completed = true;
+
+          // Terminate the child process
+          if (child && !child.killed) {
+            console.log(`🔪 Terminating process: ${command}`);
+            child.kill("SIGTERM");
+
+            // Force kill after 5 seconds if still not dead
+            setTimeout(() => {
+              if (child && !child.killed) {
+                console.log(`💀 Force killing process: ${command}`);
+                child.kill("SIGKILL");
+              }
+            }, 5000);
+          }
+
+          resolve({
+            success: false,
+            output: output,
+            error: `Command timed out after ${timeoutMs}ms`,
+            timedOut: true,
           });
-      } else {
-        // For non-interactive commands, use child_process
-        const child = spawn("npm", command.split(" ").slice(1), {
-          cwd: workingDir,
-          stdio: ["pipe", "pipe", "pipe"],
-          shell: true,
-        });
+        }
+      }, timeoutMs);
 
-        let output = "";
-        let errorOutput = "";
+      child.stdout?.on("data", (data) => {
+        output += data.toString();
+      });
 
-        child.stdout?.on("data", (data) => {
-          output += data.toString();
-        });
+      child.stderr?.on("data", (data) => {
+        errorOutput += data.toString();
+      });
 
-        child.stderr?.on("data", (data) => {
-          errorOutput += data.toString();
-        });
+      child.on("close", (code) => {
+        if (!completed) {
+          completed = true;
+          clearTimeout(timeoutId);
 
-        child.on("close", (code) => {
+          const duration = Date.now() - startTime;
+          console.log(
+            `✅ Command completed: ${command} in ${duration}ms with code ${code}`
+          );
+
           resolve({
             success: code === 0,
             output: output,
             error: code !== 0 ? errorOutput : undefined,
+            timedOut: false,
           });
-        });
+        }
+      });
 
-        child.on("error", (error) => {
+      child.on("error", (error) => {
+        if (!completed) {
+          completed = true;
+          clearTimeout(timeoutId);
+
+          console.log(`❌ Command error: ${command} - ${error.message}`);
+
           resolve({
             success: false,
             output: "",
             error: error.message,
+            timedOut: false,
           });
+        }
+      });
+    });
+  }
+
+  /**
+   * Executes interactive npm commands that require OTP with timeout protection.
+   * @param command The npm command to execute.
+   * @param workingDir The directory to run the command in.
+   * @param timeoutMs Timeout in milliseconds.
+   * @returns Promise that resolves when command completes.
+   */
+  private async executeInteractiveNpmCommand(
+    command: string,
+    workingDir: string,
+    timeoutMs: number
+  ): Promise<{
+    success: boolean;
+    output: string;
+    error?: string;
+    timedOut?: boolean;
+  }> {
+    const terminal = vscode.window.createTerminal({
+      name: `NPM: ${command}`,
+      cwd: workingDir,
+    });
+
+    terminal.show();
+    terminal.sendText(command);
+
+    const timeoutSeconds = Math.floor(timeoutMs / 1000);
+
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        terminal.dispose();
+        resolve({
+          success: false,
+          output: "",
+          error: `Interactive command timed out after ${timeoutSeconds} seconds`,
+          timedOut: true,
         });
-      }
+      }, timeoutMs);
+
+      vscode.window
+        .showInformationMessage(
+          `NPM command is running in the terminal. If prompted for OTP, please enter it.\n\nTimeout: ${timeoutSeconds} seconds`,
+          { modal: false },
+          "Completed Successfully",
+          "Failed/Cancelled"
+        )
+        .then((result) => {
+          clearTimeout(timeoutId);
+          terminal.dispose();
+
+          if (result === "Completed Successfully") {
+            resolve({
+              success: true,
+              output: "Command completed in terminal",
+              timedOut: false,
+            });
+          } else {
+            resolve({
+              success: false,
+              output: "",
+              error: "Command failed or was cancelled",
+              timedOut: false,
+            });
+          }
+        });
     });
   }
 
@@ -665,6 +797,7 @@ Current working directory: ${workingDir}
 
   /**
    * Runs pre-publish checks like building the package, running tests, and checking files.
+   * Enhanced with timeout information and better progress reporting.
    * @param packageInfo Information about the package to publish.
    * @returns True if all checks pass, false otherwise.
    */
@@ -675,21 +808,25 @@ Current working directory: ${workingDir}
       name: string;
       check: () => Promise<boolean>;
       required: boolean;
+      timeoutInfo: string;
     }> = [
       {
         name: "Build package",
         check: () => this.runBuildScript(packageInfo),
         required: true,
+        timeoutInfo: "Timeout: 2 min (extendable to 5 min)",
       },
       {
         name: "Run tests",
         check: () => this.runTests(packageInfo),
         required: false,
+        timeoutInfo: "Timeout: 3 min (extendable to 10 min)",
       },
       {
         name: "Check package files",
         check: () => this.checkPackageFiles(packageInfo),
         required: true,
+        timeoutInfo: "Quick validation",
       },
     ];
 
@@ -697,10 +834,12 @@ Current working directory: ${workingDir}
       const progress = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Running pre-publish check: ${check.name}`,
+          title: `Running pre-publish check: ${check.name} - ${check.timeoutInfo}`,
           cancellable: false,
         },
-        async () => {
+        async (progress) => {
+          // Report progress start
+          progress.report({ message: "Starting..." });
           return await check.check();
         }
       );
@@ -717,7 +856,7 @@ Current working directory: ${workingDir}
   }
   /**
    * Runs the build script defined in package.json.
-   * Enhanced with proper exit code handling and output capture.
+   * Enhanced with timeout protection and better error handling.
    * @param packageInfo Information about the package to build.
    * @returns True if build script runs successfully, false otherwise.
    */
@@ -727,13 +866,65 @@ Current working directory: ${workingDir}
     }
 
     try {
+      console.log(`🔨 Running build script for ${packageInfo.name}`);
+
       const result = await this.executeNpmCommand(
         "npm run build",
         packageInfo.path,
-        false
+        false,
+        {
+          timeoutMs: 120000, // 2 minutes for builds
+          progressTitle: `Building ${packageInfo.name}`,
+        }
       );
 
-      if (!result.success) {
+      if (result.timedOut) {
+        vscode.window.showErrorMessage(
+          `Build timed out for ${packageInfo.name}. This usually indicates a hanging build process.`
+        );
+
+        const action = await vscode.window.showWarningMessage(
+          "The build process appears to be hanging. This might be caused by:\n" +
+            "• Infinite loops in build scripts\n" +
+            "• File watchers that don't exit\n" +
+            "• Network requests that timeout\n" +
+            "• Processes waiting for user input",
+          "Retry with Longer Timeout",
+          "Skip Build (Not Recommended)",
+          "Cancel"
+        );
+
+        if (action === "Retry with Longer Timeout") {
+          // Retry with 5 minute timeout
+          const retryResult = await this.executeNpmCommand(
+            "npm run build",
+            packageInfo.path,
+            false,
+            {
+              timeoutMs: 300000, // 5 minutes
+              progressTitle: `Building ${packageInfo.name} (Extended Timeout)`,
+            }
+          );
+
+          if (retryResult.timedOut) {
+            vscode.window.showErrorMessage(
+              `Build still timed out after 5 minutes. Please check your build script for issues.`
+            );
+            return false;
+          }
+
+          return retryResult.success;
+        } else if (action === "Skip Build (Not Recommended)") {
+          const confirm = await vscode.window.showWarningMessage(
+            "Skipping the build step may cause issues during publishing. Continue anyway?",
+            "Yes, Continue",
+            "No, Cancel"
+          );
+          return confirm === "Yes, Continue";
+        } else {
+          return false;
+        }
+      } else if (!result.success) {
         vscode.window.showErrorMessage(
           `Build failed for ${packageInfo.name}: ${
             result.error || "Unknown error"
@@ -764,6 +955,7 @@ Current working directory: ${workingDir}
         return showOutput === "Continue Anyway";
       }
 
+      console.log(`✅ Build completed successfully for ${packageInfo.name}`);
       return true;
     } catch (error: any) {
       vscode.window.showErrorMessage(
@@ -775,7 +967,7 @@ Current working directory: ${workingDir}
 
   /**
    * Runs the test script defined in package.json.
-   * Enhanced with proper exit code handling and output capture.
+   * Enhanced with timeout protection and better error handling.
    * @param packageInfo Information about the package to test.
    * @returns True if tests run successfully, false otherwise.
    */
@@ -785,13 +977,60 @@ Current working directory: ${workingDir}
     }
 
     try {
+      console.log(`🧪 Running tests for ${packageInfo.name}`);
+
       const result = await this.executeNpmCommand(
         "npm test",
         packageInfo.path,
-        false
+        false,
+        {
+          timeoutMs: 180000, // 3 minutes for tests
+          progressTitle: `Testing ${packageInfo.name}`,
+        }
       );
 
-      if (!result.success) {
+      if (result.timedOut) {
+        vscode.window.showWarningMessage(
+          `Tests timed out for ${packageInfo.name}. This usually indicates hanging test processes.`
+        );
+
+        const action = await vscode.window.showWarningMessage(
+          "The test process appears to be hanging. This might be caused by:\n" +
+            "• Tests waiting for user input\n" +
+            "• Infinite loops in test code\n" +
+            "• Network-dependent tests timing out\n" +
+            "• Test framework not exiting properly",
+          "Retry with Longer Timeout",
+          "Skip Tests",
+          "Cancel"
+        );
+
+        if (action === "Retry with Longer Timeout") {
+          // Retry with 10 minute timeout
+          const retryResult = await this.executeNpmCommand(
+            "npm test",
+            packageInfo.path,
+            false,
+            {
+              timeoutMs: 600000, // 10 minutes
+              progressTitle: `Testing ${packageInfo.name} (Extended Timeout)`,
+            }
+          );
+
+          if (retryResult.timedOut) {
+            vscode.window.showWarningMessage(
+              `Tests still timed out after 10 minutes. Proceeding without tests.`
+            );
+            return true; // Tests are not required, so continue
+          }
+
+          return retryResult.success || true; // Tests failures are warnings, not errors
+        } else if (action === "Skip Tests") {
+          return true; // Tests are optional
+        } else {
+          return false;
+        }
+      } else if (!result.success) {
         vscode.window.showWarningMessage(
           `Tests failed for ${packageInfo.name}: ${
             result.error || "Unknown error"
@@ -822,6 +1061,7 @@ Current working directory: ${workingDir}
         return showOutput === "Continue Anyway";
       }
 
+      console.log(`✅ Tests completed successfully for ${packageInfo.name}`);
       return true;
     } catch (error: any) {
       vscode.window.showWarningMessage(
@@ -851,7 +1091,7 @@ Current working directory: ${workingDir}
   }
   /**
    * Executes the npm publish command with the specified options.
-   * Enhanced to properly handle OTP input and provide better feedback.
+   * Enhanced to properly handle OTP input, timeout protection, and better feedback.
    * @param packageInfo Information about the package to publish.
    * @param options Publish options like tag and access level.
    */
@@ -899,54 +1139,117 @@ Current working directory: ${workingDir}
       return;
     }
 
-    // Try automated publish first
+    // Try automated publish first with timeout protection
     const result = await this.executeNpmCommand(
       publishCommand,
       packageInfo.path,
-      false // Start with non-interactive mode
+      false, // Start with non-interactive mode
+      {
+        timeoutMs: 60000, // 1 minute timeout for publish
+        progressTitle: `Publishing ${packageInfo.name}`,
+      }
     );
 
-    if (!result.success && result.error) {
-      // Parse common npm publish errors and provide helpful messages
-      if (result.error.includes("EOTP")) {
-        // OTP required - offer manual publish option
-        const otpAction = await vscode.window.showWarningMessage(
-          "OTP (One-Time Password) required for publishing. NPM requires 2FA authentication.",
-          "Open Terminal for Manual Publish",
+    if (!result.success) {
+      // Handle timeout scenario
+      if (result.timedOut) {
+        const timeoutAction = await vscode.window.showWarningMessage(
+          `Publishing ${packageInfo.name} timed out after 1 minute. This usually indicates the npm publish command is hanging or waiting for input (like OTP).`,
+          "Retry with Extended Timeout",
+          "Use Terminal for Manual Publish",
           "Cancel"
         );
 
-        if (otpAction === "Open Terminal for Manual Publish") {
+        if (timeoutAction === "Retry with Extended Timeout") {
+          // Retry with longer timeout (5 minutes)
+          const retryResult = await this.executeNpmCommand(
+            publishCommand,
+            packageInfo.path,
+            false,
+            {
+              timeoutMs: 300000, // 5 minutes
+              progressTitle: `Publishing ${packageInfo.name} (Extended Timeout)`,
+            }
+          );
+
+          if (retryResult.timedOut) {
+            vscode.window.showErrorMessage(
+              `Publishing still timed out after 5 minutes. Please use manual publish via terminal or check your NPM configuration.`
+            );
+            return;
+          }
+
+          if (!retryResult.success && retryResult.error) {
+            throw new Error(`NPM publish failed: ${retryResult.error}`);
+          }
+
+          // Success after retry
+          vscode.window.showInformationMessage(
+            `✅ Successfully published ${packageInfo.name}@${packageInfo.version}${
+              options.tag !== "latest" ? ` with tag "${options.tag}"` : ""
+            }`
+          );
+          return;
+        } else if (timeoutAction === "Use Terminal for Manual Publish") {
           const terminal = vscode.window.createTerminal({
-            name: `NPM Publish with OTP - ${packageInfo.name}`,
+            name: `NPM Publish - ${packageInfo.name}`,
             cwd: packageInfo.path,
           });
 
           terminal.show();
           terminal.sendText(publishCommand);
-
-          // Don't show success message - user needs to complete the OTP process manually
           return;
         } else {
-          vscode.window.showInformationMessage(
-            "NPM publish cancelled. OTP authentication required."
-          );
+          vscode.window.showInformationMessage("NPM publish cancelled.");
           return;
         }
-      } else if (result.error.includes("ENEEDAUTH")) {
-        throw new Error(
-          "Authentication required. Please run npm login or set up an NPM access token."
-        );
-      } else if (result.error.includes("E403")) {
-        throw new Error(
-          "Permission denied. You may not have permission to publish this package or the version already exists."
-        );
-      } else if (result.error.includes("ENOTFOUND")) {
-        throw new Error(
-          "Network error. Please check your internet connection and npm registry settings."
-        );
+      }
+
+      // Handle error scenarios (not timeout)
+      if (result.error) {
+        // Parse common npm publish errors and provide helpful messages
+        if (result.error.includes("EOTP")) {
+          // OTP required - offer manual publish option
+          const otpAction = await vscode.window.showWarningMessage(
+            "OTP (One-Time Password) required for publishing. NPM requires 2FA authentication.",
+            "Open Terminal for Manual Publish",
+            "Cancel"
+          );
+
+          if (otpAction === "Open Terminal for Manual Publish") {
+            const terminal = vscode.window.createTerminal({
+              name: `NPM Publish with OTP - ${packageInfo.name}`,
+              cwd: packageInfo.path,
+            });
+
+            terminal.show();
+            terminal.sendText(publishCommand);
+
+            // Don't show success message - user needs to complete the OTP process manually
+            return;
+          } else {
+            vscode.window.showInformationMessage(
+              "NPM publish cancelled. OTP authentication required."
+            );
+            return;
+          }
+        } else if (result.error.includes("ENEEDAUTH")) {
+          throw new Error(
+            "Authentication required. Please run npm login or set up an NPM access token."
+          );
+        } else if (result.error.includes("E403")) {
+          throw new Error(
+            "Permission denied. You may not have permission to publish this package or the version already exists."
+          );
+        } else if (result.error.includes("ENOTFOUND")) {
+          throw new Error(
+            "Network error. Please check your internet connection and npm registry settings."
+          );
+        } else {
+          throw new Error(`NPM publish failed: ${result.error}`);
+        }
       } else {
-        throw new Error(`NPM publish failed: ${result.error}`);
+        throw new Error("NPM publish failed with unknown error");
       }
     }
 
@@ -1057,6 +1360,51 @@ Current working directory: ${workingDir}
         `Failed to update version for ${packageInfo.name}: ${error.message}`
       );
     }
+  }
+
+  /**
+   * Checks if the given .npmrc content contains actual authentication tokens.
+   * This method looks for specific authentication patterns rather than just
+   * any occurrence of "_auth" which could match configuration settings.
+   * @param content The content of the .npmrc file
+   * @returns true if the content contains authentication tokens
+   */
+  private containsAuthToken(content: string): boolean {
+    // Split content into lines and check each line
+    const lines = content.split("\n").map((line) => line.trim());
+
+    for (const line of lines) {
+      // Skip empty lines and comments
+      if (!line || line.startsWith("#") || line.startsWith(";")) {
+        continue;
+      }
+
+      // Check for various authentication token patterns
+      // Registry-specific auth tokens
+      if (line.includes(":_authToken=") || line.includes(":_auth=")) {
+        return true;
+      }
+
+      // Global auth tokens
+      if (line.startsWith("_authToken=") || line.startsWith("_auth=")) {
+        return true;
+      }
+
+      // Legacy authentication patterns
+      if (
+        line.startsWith("authToken=") ||
+        line.includes("//registry.npmjs.org/:_authToken=")
+      ) {
+        return true;
+      }
+
+      // Check for other authentication patterns like always-auth
+      if (line.startsWith("always-auth=true") && content.includes("_auth")) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 
