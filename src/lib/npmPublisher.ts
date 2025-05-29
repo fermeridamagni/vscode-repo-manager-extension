@@ -869,35 +869,72 @@ Current working directory: ${workingDir}
       publishCommand += " --access public";
     }
 
-    // Check if package might require OTP (if user has 2FA enabled)
+    // Check if package might require OTP (2FA can be enabled even with tokens)
     const authCheck = await this.checkNpmAuth(packageInfo.path);
-    const mightRequireOTP = !authCheck.hasToken; // Token auth typically bypasses OTP
 
-    if (mightRequireOTP) {
-      const otpWarning = await vscode.window.showWarningMessage(
-        `Publishing ${packageInfo.name}@${packageInfo.version}. If you have 2FA enabled, you may need to enter an OTP (One-Time Password).`,
-        "Continue",
-        "Cancel"
-      );
+    // Show OTP warning for all authenticated users (2FA can be enabled regardless of auth method)
+    const otpWarning = await vscode.window.showWarningMessage(
+      `Publishing ${packageInfo.name}@${packageInfo.version}. If you have 2FA enabled on your NPM account, you may need to enter an OTP (One-Time Password).`,
+      "Continue with Auto Publish",
+      "Use Terminal for Manual Publish",
+      "Cancel"
+    );
 
-      if (otpWarning !== "Continue") {
-        throw new Error("Publish cancelled by user");
-      }
+    if (otpWarning === "Cancel") {
+      vscode.window.showInformationMessage("NPM publish cancelled by user.");
+      return;
     }
 
-    // Execute the publish command
+    if (otpWarning === "Use Terminal for Manual Publish") {
+      // Open terminal with the command for manual publish
+      const terminal = vscode.window.createTerminal({
+        name: `NPM Publish - ${packageInfo.name}`,
+        cwd: packageInfo.path,
+      });
+
+      terminal.show();
+      terminal.sendText(publishCommand);
+
+      // Don't show success message - user needs to complete the process manually
+      return;
+    }
+
+    // Try automated publish first
     const result = await this.executeNpmCommand(
       publishCommand,
       packageInfo.path,
-      mightRequireOTP
+      false // Start with non-interactive mode
     );
 
     if (!result.success && result.error) {
       // Parse common npm publish errors and provide helpful messages
       if (result.error.includes("EOTP")) {
-        throw new Error(
-          "OTP (One-Time Password) required. Please ensure you entered the correct OTP from your authenticator app."
+        // OTP required - offer manual publish option
+        const otpAction = await vscode.window.showWarningMessage(
+          "OTP (One-Time Password) required for publishing. NPM requires 2FA authentication.",
+          "Open Terminal for Manual Publish",
+          "Cancel"
         );
+
+        if (otpAction === "Open Terminal for Manual Publish") {
+          const terminal = vscode.window.createTerminal({
+            name: `NPM Publish with OTP - ${packageInfo.name}`,
+            cwd: packageInfo.path,
+          });
+
+          terminal.show();
+          terminal.sendText(publishCommand);
+
+          vscode.window.showInformationMessage(
+            `Terminal opened for manual NPM publish with OTP support.\n\nCommand: ${publishCommand}\n\nPlease enter your OTP when prompted and complete the publish process.`
+          );
+          return;
+        } else {
+          vscode.window.showInformationMessage(
+            "NPM publish cancelled. OTP authentication required."
+          );
+          return;
+        }
       } else if (result.error.includes("ENEEDAUTH")) {
         throw new Error(
           "Authentication required. Please run npm login or set up an NPM access token."
