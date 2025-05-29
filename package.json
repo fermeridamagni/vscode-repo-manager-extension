@@ -1,8 +1,10 @@
 {
   "name": "vscode-repo-manager-extension",
   "displayName": "Repo Manager",
-  "description": "Manage packages in repos and monorepos: Create GitHub releases, publish to NPM, and make conventional commits",
+  "description": "A comprehensive VS Code extension for managing packages in repositories and monorepos with enhanced release management and NPM publishing capabilities.",
   "version": "0.0.3",
+  "license": "MIT",
+  "icon": "resources/logo.png",
   "publisher": "magnidev",
   "author": {
     "name": "fermeridamagni <Magni Development>",
@@ -24,14 +26,14 @@
     "monorepo",
     "repository management"
   ],
-  "license": "MIT",
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
   "engines": {
     "vscode": "^1.100.2",
     "node": ">=20.0.0"
   },
-  "categories": [
-    "Other"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -147,23 +149,23 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "22.15.24",
+    "@types/node": "22.15.26",
     "@types/semver": "^7.7.0",
     "@types/vscode": "^1.100.0",
-    "@typescript-eslint/eslint-plugin": "^8.31.1",
-    "@typescript-eslint/parser": "^8.31.1",
+    "@typescript-eslint/eslint-plugin": "^8.33.0",
+    "@typescript-eslint/parser": "^8.33.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "esbuild": "^0.25.3",
-    "eslint": "^9.25.1",
+    "esbuild": "^0.25.5",
+    "eslint": "^9.27.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
-    "semver": "^7.6.0",
-    "simple-git": "^3.21.0"
+    "semver": "^7.7.2",
+    "simple-git": "^3.27.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
