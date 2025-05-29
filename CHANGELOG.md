@@ -12,7 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 #### NPM Publishing OTP (One-Time Password) Handling
 
-**Problem Fixed**: The extension was failing to handle NPM's OTP requirements properly, causing publish failures with unclear error messages when users had 2FA enabled.
+**Problems Fixed**:
+
+1. **OTP Detection Logic Issue**: The extension was failing to handle NPM's OTP requirements properly, causing publish failures with unclear error messages when users had 2FA enabled.
+
+2. **Visual Issue - Premature Alert Messages**: When users chose to use the terminal for manual NPM publishing, the extension was showing success-like alert messages **before** the user had actually completed the publish process in the terminal, causing confusion about publish completion status.
 
 **Root Cause**: The original logic incorrectly assumed that having an auth token meant OTP would not be required: `const mightRequireOTP = !authCheck.hasToken`. This was wrong - NPM can require OTP regardless of authentication method if 2FA is enabled on the user's account.
 
@@ -24,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Before: Auto-publish → EOTP error → Generic error message
   - After: Shows OTP warning with three options ("Continue with Auto Publish", "Use Terminal for Manual Publish", "Cancel") → If auto-publish fails with EOTP → Automatic terminal fallback → Clear instructions for OTP entry
 
+- **Fixed Visual Issue**: Removed premature alert messages when opening terminal for manual publish
+  - Before: Terminal opens → Immediate confusing alert → User thinks publish is complete
+  - After: Terminal opens silently → Clean experience → User completes OTP process
+
 - **Improved Error Handling**: Graceful cancellation (no more thrown errors when user cancels), automatic fallback (EOTP errors now trigger terminal option instead of failure), and better messaging with clear explanations of what OTP is and why it's needed
 
 **Key Benefits**:
@@ -34,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - ✅ Graceful cancellation without throwing errors
 - ✅ Works with all auth methods (tokens, login, etc.)
 - ✅ Clear user guidance throughout the process
+- ✅ Clean terminal experience without premature alerts
 
 ### Enhanced
 

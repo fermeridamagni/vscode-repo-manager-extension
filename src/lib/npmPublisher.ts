@@ -925,9 +925,7 @@ Current working directory: ${workingDir}
           terminal.show();
           terminal.sendText(publishCommand);
 
-          vscode.window.showInformationMessage(
-            `Terminal opened for manual NPM publish with OTP support.\n\nCommand: ${publishCommand}\n\nPlease enter your OTP when prompted and complete the publish process.`
-          );
+          // Don't show success message - user needs to complete the OTP process manually
           return;
         } else {
           vscode.window.showInformationMessage(
