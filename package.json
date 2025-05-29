@@ -4,6 +4,10 @@
   "description": "Manage packages in repos and monorepos: Create GitHub releases, publish to NPM, and make conventional commits",
   "version": "0.0.1",
   "publisher": "fermeridamagni",
+  "author": {
+    "name": "fermeridamagni",
+    "url": "https://github.com/fermeridamagni"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/fermeridamagni/vscode-repo-manager-extension"
@@ -20,6 +24,7 @@
     "monorepo",
     "repository management"
   ],
+  "license": "MIT",
   "engines": {
     "vscode": "^1.100.0"
   },
