@@ -1,3 +1,6 @@
+> [!NOTE]
+> This project was fully Vibe Coded
+
 # VS Code Repo Manager Extension
 
 A comprehensive VS Code extension for managing packages in repositories and monorepos with enhanced release management and NPM publishing capabilities.
